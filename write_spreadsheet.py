@@ -9,12 +9,12 @@ def write_to_spreadsheet(values, service, SPREADSHEET_ID,flag):
     if(flag==1):
 
         #Write to local excel spreadsheet 
-        filepath = "Hire_Salary.xlsx"
+        filepath = DATASHEET
         wb=load_workbook(filepath)
         ws = wb.create_sheet(RANGE_NAME)
         for row in values:
             ws.append(row)
-        wb.save("Hire_Salary.xlsx")
+        wb.save(DATASHEET)
 
     else:
         body = {
