@@ -50,6 +50,9 @@ Spreadsheet ID = 123ABC
 # Running the script
 # If you're using a spreadsheet from a local machine pass in the flag value as 1:
 ## Uploading all images to Qualtrics
+* Place excel workbook in .xlsx format, containing data in the same folder as main.py.
+* The sheet containing data should be names as 'item assignment'
+* Replace the value of DATASHEET in credentials.py to the workbook name.
 * Run `python main.py upload 1` 
 
 ## Create Survey
