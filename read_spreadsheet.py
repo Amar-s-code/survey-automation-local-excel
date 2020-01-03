@@ -5,7 +5,7 @@ from openpyxl import load_workbook
 def read_image_spreadsheet(service,  SPREADSHEET_ID, flag, RANGE_NAME = 'images'):
 
     if(flag==1):
-        filename="Hire_Salary.xlsx"
+        filename=DATASHEET
         wb = load_workbook(filename)
         ws = wb['images']
         folder_cells,ids_cells = ws['A'] ,ws['B']
@@ -35,7 +35,7 @@ def read_image_spreadsheet(service,  SPREADSHEET_ID, flag, RANGE_NAME = 'images'
 
 def read_item_spreadsheet(service, SPREADSHEET_ID, flag,RANGE_NAME = 'item assignment!B2:B'):
     if(flag==1):
-        filename = "Hire_Salary.xlsx"
+        filename = DATASHEET
         wb = load_workbook(filename)
         ws = wb['item assignment']
         images_cell,cond_cell =  ws['B'], ws['BV']
