@@ -1,0 +1,303 @@
+from __future__ import print_function
+from credentials import *
+from write_spreadsheet import *
+from read_spreadsheet import * 
+import pickle
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import os
+import requests
+import sys
+import json
+from formats import *
+from openpyxl import load_workbook
+
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+def getValues(response):
+	values = json.loads(response.text)
+	print(values)
+	return values
+
+def get_survey_def(APITOKEN, DATACENTER, surveyId):
+	# Setting user Parameters
+
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}"\
+												.format(DATACENTER, surveyId)
+	response = requests.get(baseUrl, headers=getGetHeaders())
+	values = getValues(response)
+	print(json.dumps(values, indent=4, sort_keys=True))
+
+def survey_creation(DATACENTER, APITOKEN):
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions"\
+													.format(DATACENTER)
+	data = {
+			"SurveyName": "My New Survey",
+	        "Language": "EN",
+	        "ProjectCategory": "CORE",
+	        }
+
+	response = requests.post(baseUrl, json=data, headers=getPostHeaders())
+	values = getValues(response)
+	return values['result']['DefaultBlockID'], values['result']['SurveyID']
+
+def format_survey(APITOKEN, DATACENTER, surveyId):
+
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}/options"\
+										.format(DATACENTER, surveyId)
+
+	data = getSurveyFormat()
+	
+	response = requests.put(baseUrl, json=data, headers=getPostHeaders())
+	getValues(response)
+
+def activate_survey(APITOKEN, DATACENTER, surveyId):
+	baseUrl = "https://{0}.qualtrics.com/API/v3/surveys/{1}"\
+								.format(DATACENTER, surveyId)
+
+	data = {
+	  "isActive": True
+	}
+
+	response = requests.put(baseUrl, json=data, headers=getPostHeaders())
+	getValues(response)
+
+def add_image(APITOKEN, DATACENTER, surveyId, image_id, question):
+
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}/questions"\
+	.format(DATACENTER, surveyId)
+	
+	data = getImageFormat(image_id, question)
+	response = requests.post(baseUrl, json=data, headers=getPostHeaders())
+	values = getValues(response)
+	return values['result']['QuestionID']
+
+def add_question(APITOKEN, DATACENTER, surveyId, questionType):
+
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}/questions"\
+	.format(DATACENTER, surveyId)
+
+	data = None
+	if questionType == 1:
+		data = getScaleQuestionFormat()
+	elif questionType == 2:
+		data = getLikelihoodQuestionFormat()
+	
+	response = requests.post(baseUrl, json=data, headers=getPostHeaders())
+	values = getValues(response)
+	return values['result']['QuestionID']
+
+def publish_survey(DATACENTER, APITOKEN, surveyId):
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}/versions"\
+														.format(DATACENTER, surveyId)
+
+	data = {
+	  "Description": "2018 New Survey Version",
+	  "Published": True
+	}
+
+	response = requests.post(baseUrl, json=data, headers=getPostHeaders())
+
+	values = getValues(response)
+	return values['result']['metadata']['surveyID']
+
+
+def delete_images(DATACENTER, APITOKEN, image_id):
+	baseUrl = "https://{0}.qualtrics.com/API/v3/libraries/UR_816V731TcdG4o0l/graphics/{1}".format(DATACENTER, image_id)
+
+	response = requests.delete(baseUrl, headers = getGetHeaders())
+	getValues(response)
+
+
+def upload_image(DATACENTER, APITOKEN, image_dir, description):
+
+	baseUrl = "https://{0}.qualtrics.com/API/v3/libraries/UR_816V731TcdG4o0l/graphics".format(DATACENTER)
+	file = {'file': (description, open(image_dir,'rb'), 'image/jpeg')}
+
+	response = requests.post(baseUrl, headers=getGetHeaders(), files=file)
+	values = getValues(response)
+	print(values)
+	return values['result']['id']
+
+def upload_all_images(DATACENTER, APITOKEN, service,flag):
+	data = [['Image Folder', 'Image ID']]
+	for f in os.listdir('Images'):
+		images = os.listdir('Images/' + f)
+		for image in images:
+			if f == '.DS_Store' or images == '.DS_Store':
+				continue
+			image_dir = 'Images/' + f + '/' + str(images[0])
+			image_id = upload_image(DATACENTER, APITOKEN, image_dir, f)
+			data.append([f, image_id])
+			break
+	print(data)
+	write_to_spreadsheet(data, service, SPREADSHEET_ID,flag)
+
+def create_block(DATACENTER, APITOKEN, surveyId):
+
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}/blocks"\
+														.format(DATACENTER, surveyId)
+	data = {"Type": "Standard",
+	"Description": "My Block Name",
+	"Options": {
+	"BlockLocking": "false",
+	"RandomizeQuestions": "false",
+	"BlockVisibility": "Collapsed"}
+	}
+
+	response = requests.post(baseUrl, json = data, headers = getPostHeaders())
+	values = getValues(response)
+	return values['result']['BlockID'], values['result']['FlowID']
+
+def update_block(DATACENTER, APITOKEN, surveyId, blockId, questionIds):
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}/blocks/{2}"\
+														.format(DATACENTER, surveyId, blockId)
+	questions = []
+	for question in questionIds:
+		questions.append(
+			{"Type": "Question",
+			"QuestionID" : question})
+
+	data = {"Type": "Standard",
+			"Description": "My Block Name",
+			"BlockElements": questions,
+			"Options": {
+			"BlockLocking": "false",
+			"RandomizeQuestions": "false",
+			"BlockVisibility": "Collapsed"
+			}
+			}
+
+
+	response = requests.put(baseUrl, json = data, headers = getPostHeaders())
+
+def delete_block(DATACENTER, APITOKEN, surveyId, blockId):
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}/blocks/{2}"\
+										.format(DATACENTER, surveyId, blockId)
+	
+	headers = {
+	   "x-api-token": APITOKEN
+	}
+
+	response = requests.delete(baseUrl, headers = headers)
+	print(response.text)
+
+
+def update_flow(DATACENTER, APITOKEN, surveyId, flows, blocks, defaultId):
+	baseUrl = "https://{0}.qualtrics.com/API/v3/survey-definitions/{1}/flow".format(DATACENTER, surveyId)
+	temp = []
+	for flow, block in zip(flows, blocks):
+		temp.append({
+			"ID" : block,
+			"Type" : "Block",
+			"FlowID" : flow
+			})
+
+	data = {"Flow" : temp,
+	"FlowID": "FL_1",
+    "Properties": {
+        "Count": 2,
+        "RemovedFieldsets": []
+    },
+    "Type": "Root"}
+
+	response = requests.put(baseUrl, json = data, headers = getPostHeaders())
+	values = getValues(response)
+
+if __name__ == '__main__':
+	"""Shows basic usage of the Sheets API.
+	Prints values from a sample spreadsheet.
+	"""
+	creds = None
+	# The file token.pickle stores the user's access and refresh tokens, and is
+	# created automatically when the authorization flow completes for the first
+	# time.
+	if os.path.exists('token.pickle'):
+		with open('token.pickle', 'rb') as token:
+			creds = pickle.load(token)
+	# If there are no (valid) credentials available, let the user log in.
+	if not creds or not creds.valid:
+		if creds and creds.expired and creds.refresh_token:
+			creds.refresh(Request())
+		else:
+			flow = InstalledAppFlow.from_client_secrets_file('credentials_web.json', SCOPES)
+			creds = flow.run_local_server()
+			# Save the credentials for the next run
+		with open('token.pickle', 'wb') as token:
+			pickle.dump(creds, token)
+
+
+	service = build('sheets', 'v4', credentials=creds)
+	#Only needed when need to upload all of the images onto Qualtrics
+	if len(sys.argv) == 3:
+		flag = sys.argv[2]
+		upload_all_images(DATACENTER, APITOKEN, service,flag)
+	else:
+		flag = sys.argv[1]
+		images, questions = read_item_spreadsheet(service,SPREADSHEET_ID, flag)
+		imageToId = read_image_spreadsheet(service, SPREADSHEET_ID, flag)
+		
+		##Create survey
+		defaultBlock, surveyId = survey_creation(DATACENTER, APITOKEN)
+		format_survey(APITOKEN, DATACENTER, surveyId)
+
+		counter = 0 
+		flows = []
+		blocks = []
+		folder,value = '',""
+		question=0
+		for i in range(len(images)):
+			if(flag==1):
+				folder=images[i]
+				question = questions[i]
+			else:
+				value = images[i]
+				question = questions[i][0]
+				folder = value[0]
+			questionIDs = [] 
+			if folder in imageToId:
+				print("creating block")
+				blockID, flowID = create_block(DATACENTER, APITOKEN, surveyId)
+				flows.append(flowID)
+				blocks.append(blockID)
+				print("adding image")
+				ID = add_image(APITOKEN, DATACENTER, surveyId, imageToId[folder], question)
+				questionIDs.append(ID)
+				print("adding question")
+				ID = add_question(APITOKEN, DATACENTER, surveyId, 1)
+				questionIDs.append(ID)
+				print("updating block")
+				update_block(DATACENTER, APITOKEN, surveyId, blockID, questionIDs)
+
+		update_flow(DATACENTER, APITOKEN, surveyId, flows, blocks, defaultBlock)
+		publish_survey(DATACENTER, APITOKEN, surveyId)
+		activate_survey(APITOKEN, DATACENTER, surveyId)
+		print("https://neu.co1.qualtrics.com/jfe/form/{}".format(surveyId))
+
+		# print(surveyId)
+		# get_survey_def(apiToken, DATACENTER, surveyId)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
