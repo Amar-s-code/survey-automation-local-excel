@@ -27,7 +27,7 @@ Would prefer you clone the repository, in case there are any changes in the code
 * Under the 'Credentials' tab there should be a new ID, select the Download option at the right side 
 * Place the downloaded file in the project folder and rename 'credentials_web.json'
 
-## Enabling Googl Sheets API
+## Enabling Google Sheets API
 * Under APIs & Services select 'Enable APIs and Services'
 * Search for 'Google Sheets APIs' and Enable
 
@@ -59,7 +59,7 @@ Spreadsheet ID = 123ABC
 * Run `python main.py 1`
 * Once survey is created, the survey link will be printed and will be ready to use!
 
-# If you're using a spreadsheet from a local machine pass in the flag value as 0:
+# If you're using a spreadsheet from cloud pass in the flag value as 0:
 ## Uploading all images to Qualtrics
 * Run `python main.py upload 0` 
 * If the web browser prompts you, select the account where the 'Hire Salary' sheet is located and Allow. 
